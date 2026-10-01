@@ -296,6 +296,12 @@
 
 <audio id="playerAudio" preload="auto"></audio>
 
+<!-- 预加载黑胶曲目（隐藏 audio 标签） -->
+<audio preload="auto" src="assets/vinyl1.mp4"></audio>
+<audio preload="auto" src="assets/vinyl2.mp4"></audio>
+<audio preload="auto" src="assets/vinyl3.mp4"></audio>
+<audio preload="auto" src="assets/vinyl4.mp4"></audio>
+
 <!-- 开场介绍 -->
 <div id="intro">
   <div class="card">
@@ -476,20 +482,58 @@ map.addEventListener("click", e=>{
 function playAudio(src, onEnd, maxSec){
   S.playing = true;
   S.perfectListen = true;
+  showTip("🔄 正在加载音乐…");
+
+  // 清理上一次的定时器和监听
+  if(S.endTimer){ clearTimeout(S.endTimer); S.endTimer=null; }
+  audio.onerror = null;
+  audio.onended = null;
+  audio.onplaying = null;
+  audio.oncanplaythrough = null;
+
   audio.src = src;
   audio.volume = inNoise() ? 0.4 : 1.0;
-  audio.play();
+  audio.load();
 
+  let ended = false;
   const done = ()=>{
+    if(ended) return; ended = true;
     if(S.endTimer){ clearTimeout(S.endTimer); S.endTimer=null; }
     S.playing = false;
+    audio.onerror = null;
+    audio.onended = null;
+    audio.onplaying = null;
     onEnd && onEnd();
   };
+
+  // 错误处理：MP4 编码不支持/网络错误
+  audio.onerror = ()=>{
+    showTip("⚠️ 这首曲子加载失败（格式不支持），跳过。");
+    done();
+  };
+
+  // 真正开始播放后才启动"最长时长"定时器（避免缓冲未完成就强制结束）
+  audio.onplaying = ()=>{
+    showTip("🎵 播放中…");
+    if(maxSec){
+      S.endTimer = setTimeout(()=>{
+        if(!audio.paused) audio.pause();
+        done();
+      }, maxSec*1000);
+    }
+  };
+
   audio.onended = done;
-  // 黑胶播放限制 20–30 秒
-  if(maxSec){
-    S.endTimer = setTimeout(()=>{ audio.pause(); done(); }, maxSec*1000);
+
+  // 启动播放（浏览器返回 Promise，可能因自动播放策略被拒绝）
+  const p = audio.play();
+  if(p && p.catch){
+    p.catch(err=>{
+      showTip("⚠️ 浏览器拦截了音频，请再点一次物件");
+      S.playing = false;
+    });
   }
+
   // 完美聆听监测
   if(S.currentMachine){
     const watch = setInterval(()=>{
