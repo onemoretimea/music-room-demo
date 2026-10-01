@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>音乐小屋 · 寻声 Demo</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family:"Segoe UI","Microsoft YaHei",sans-serif; }
+  body { background:#14141c; color:#e8e8f0; min-height:100vh; padding:16px; }
+  #wrap { max-width:1080px; margin:0 auto; }
+
+  /* 顶部状态栏 */
+  #hud { display:flex; gap:18px; flex-wrap:wrap; align-items:center;
+         background:#1f1f2e; padding:12px 16px; border-radius:10px; margin-bottom:12px;
+         border:1px solid #2e2e44; }
+  #hud .item { font-size:14px; }
+  #hud .item b { color:#ffd97a; font-size:18px; margin-left:4px; }
+  #hud .inv { margin-left:auto; display:flex; gap:6px; align-items:center; font-size:13px; }
+  .chip { background:#2e2e44; padding:4px 10px; border-radius:12px; font-size:12px; }
+
+  /* 地图：木地板房间 */
+  #map { position:relative; width:100%; height:600px;
+         background:
+           /* 木地板纹理 */
+           repeating-linear-gradient(0deg,
+             #5a3d24 0px, #5a3d24 38px,
+             #4e3420 38px, #4e3420 40px),
+           #4e3420;
+         border:6px solid #3a2818;
+         border-radius:6px; overflow:hidden; cursor:pointer;
+         box-shadow:inset 0 0 60px rgba(0,0,0,0.5); }
+
+  /* 场景装饰层 */
+  .scene { position:absolute; pointer-events:none; z-index:0; }
+
+  /* 中央扶手椅（替代红地毯） */
+  .armchair { left:38%; top:40%; width:110px; height:90px;
+              background:linear-gradient(180deg,#7a5a3a,#4a3018);
+              border:4px solid #3a2410; border-radius:14px; }
+  .armchair::before { content:"🛋️"; position:absolute; left:50%; top:50%;
+                      transform:translate(-50%,-50%); font-size:48px; }
+
+  /* 左上角门口 */
+  .door { left:0; top:0; width:70px; height:110px;
+          background:linear-gradient(180deg,#4a3018,#2a1808);
+          border-right:4px solid #1a0e04; border-bottom:4px solid #1a0e04; }
+  .door::after { content:"🚪"; position:absolute; left:50%; top:50%;
+                 transform:translate(-50%,-50%); font-size:36px; }
+  .doorLabel { left:8px; top:115px; font-size:11px; color:#ffd97a; }
+
+  /* 书架（左上） */
+  .bookshelf { left:20px; top:20px; width:90px; height:140px;
+               background:linear-gradient(180deg,#6a4a2a,#4a3018);
+               border:3px solid #3a2410; border-radius:3px; }
+  .bookshelf::before, .bookshelf::after {
+    content:""; position:absolute; left:6px; right:6px; height:3px; background:#3a2410; }
+  .bookshelf::before { top:45px; } .bookshelf::after { top:95px; }
+
+  /* 窗户（右上，月光） */
+  .window { right:30px; top:20px; width:100px; height:120px;
+            background:linear-gradient(180deg,#1a2a4a,#3a5a8a);
+            border:5px solid #3a2410; border-radius:3px;
+            box-shadow:inset 0 0 20px rgba(180,200,255,0.3); }
+  .window::before { content:""; position:absolute; left:50%; top:0; bottom:0;
+                     width:3px; background:#3a2410; }
+  .window::after { content:""; position:absolute; top:50%; left:0; right:0;
+                     height:3px; background:#3a2410; }
+
+  /* 壁炉（左下） */
+  .fireplace { left:30px; bottom:30px; width:110px; height:90px;
+               background:linear-gradient(180deg,#5a5a6a,#3a3a4a);
+               border:4px solid #2a2a3a; border-radius:4px; }
+  .fireplace::before { content:"🔥"; position:absolute; left:50%; top:50%;
+                      transform:translate(-50%,-50%); font-size:32px; }
+
+  /* 小桌子（右下） */
+  .table { right:40px; bottom:40px; width:90px; height:50px;
+           background:linear-gradient(180deg,#6a4a2a,#4a3018);
+           border:3px solid #3a2410; border-radius:4px; }
+
+  /* 盆栽（中间偏右） */
+  .plant { right:180px; bottom:30px; width:40px; height:60px; font-size:40px; }
+
+  /* === 新增：隔墙（把房间分成几个区域） === */
+  .wallH { position:absolute; background:linear-gradient(180deg,#4a3018,#3a2410);
+           height:14px; z-index:1; box-shadow:0 2px 4px rgba(0,0,0,0.4); }
+  .wallV { position:absolute; background:linear-gradient(90deg,#4a3018,#3a2410);
+           width:14px; z-index:1; box-shadow:2px 0 4px rgba(0,0,0,0.4); }
+
+  /* 三角钢琴（大物件装饰） */
+  .piano { left:60%; top:8%; width:140px; height:70px;
+           background:linear-gradient(135deg,#1a1a1a,#3a3a3a);
+           border:3px solid #000; border-radius:8px; }
+  .piano::before { content:"🎹"; position:absolute; left:50%; top:50%;
+                   transform:translate(-50%,-50%); font-size:40px; }
+
+  /* 圆形地毯（会客区） */
+  .roundrug { left:20%; top:55%; width:200px; height:200px; border-radius:50%;
+              background:radial-gradient(circle,#5a3d5a 0%,#3a2540 70%,transparent 72%);
+              opacity:0.7; }
+
+  /* 吊灯 */
+  .chandelier { left:50%; top:0; width:60px; height:50px; font-size:36px;
+                transform:translateX(-50%); }
+
+  /* 留声机大喇叭装饰（墙上挂画） */
+  .portrait { left:45%; top:15%; width:50px; height:65px;
+              background:#e8d8b8; border:3px solid #3a2410; border-radius:2px;
+              display:flex; align-items:center; justify-content:center; font-size:28px; }
+
+  /* 乐谱架 */
+  .musicstand { left:75%; top:55%; width:35px; height:55px; font-size:32px; }
+
+  /* 噪音区域 */
+  .noise { position:absolute; border-radius:50%;
+           background:repeating-radial-gradient(circle at center,
+             rgba(120,120,140,0.15) 0px, rgba(120,120,140,0.15) 6px,
+             rgba(90,90,110,0.15) 6px, rgba(90,90,110,0.15) 12px);
+           border:2px dashed #888; pointer-events:none; z-index:1; }
+
+  /* 可交互物件：emoji 图标卡片 */
+  .obj { position:absolute; width:64px; height:64px; border-radius:10px;
+         display:flex; flex-direction:column; align-items:center; justify-content:center;
+         font-size:28px; cursor:pointer; user-select:none; z-index:2;
+         background:rgba(20,20,30,0.75); border:2px solid rgba(255,255,255,0.3);
+         box-shadow:0 2px 8px rgba(0,0,0,0.5);
+         transition:transform .15s, box-shadow .15s; line-height:1; }
+  .obj small { font-size:10px; color:#ddd; margin-top:2px; }
+  .obj:hover { transform:scale(1.1); box-shadow:0 0 16px rgba(255,217,122,0.6); border-color:#ffd97a; }
+  .obj.used { opacity:0.25; filter:grayscale(1); pointer-events:none; }
+  .phonograph small { color:#e8c89a; }
+  .vinylplayer small { color:#ffd97a; }
+  .musicbox small { color:#d8a8e8; }
+  .tune small { color:#a8d8ff; }
+
+  /* 唱片：纯黑小圆片，外观一致 */
+  .discpick { width:30px; height:30px; border-radius:50%;
+              background:radial-gradient(circle,#2a2a2a 30%,#0a0a0a 70%);
+              border:2px solid #555; box-shadow:0 0 6px rgba(0,0,0,0.6); }
+
+  .obj.playing { animation:pulse 1s ease-in-out infinite; border-color:#ffd97a; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 8px #ffd97a} 50%{box-shadow:0 0 22px #ffd97a} }
+
+  /* 火柴人 */
+  #player { position:absolute; width:32px; height:44px; z-index:5;
+            transition:left .5s ease, top .5s ease; }
+  #player svg { width:100%; height:100%; filter:drop-shadow(0 0 4px rgba(122,208,255,0.8)); }
+
+  /* 底部提示 */
+  #tip { margin-top:10px; padding:10px 14px; background:#1f1f2e; border-radius:8px;
+         font-size:14px; min-height:42px; border-left:3px solid #ffd97a; }
+
+  /* 弹窗 */
+  #mask { position:fixed; inset:0; background:rgba(0,0,0,0.7); display:none; z-index:50; }
+  #modal { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+           background:#26263a; padding:24px; border-radius:12px; border:2px solid #ffd97a;
+           width:440px; max-width:90vw; display:none; z-index:51; }
+  #modal h3 { color:#ffd97a; margin-bottom:12px; }
+  #modal p { margin-bottom:16px; line-height:1.5; }
+  .opt { display:block; width:100%; padding:10px; margin:6px 0; text-align:left;
+         background:#35354d; color:#fff; border:1px solid #555; border-radius:6px;
+         cursor:pointer; font-size:14px; }
+  .opt:hover { background:#4a4a6a; border-color:#ffd97a; }
+  .opt.right { background:#2a6a3a !important; border-color:#4aaf6a !important; }
+  .opt.wrong { background:#7a2a2a !important; border-color:#af4a4a !important; }
+
+  /* 通关 */
+  #win { position:fixed; inset:0; background:rgba(20,20,30,0.95); display:none;
+         z-index:100; align-items:center; justify-content:center; flex-direction:column; }
+  #win h1 { color:#ffd97a; font-size:42px; margin-bottom:16px; }
+  #win p { font-size:18px; margin:6px 0; }
+  #win button { margin-top:20px; padding:10px 24px; font-size:16px;
+                background:#ffd97a; border:none; border-radius:8px; cursor:pointer; }
+
+  /* 开场介绍 */
+  #intro { position:fixed; inset:0; background:rgba(10,10,18,0.96); z-index:200;
+           display:flex; align-items:center; justify-content:center; }
+  #intro .card { background:#1f1f2e; border:2px solid #ffd97a; border-radius:14px;
+                 padding:28px 32px; max-width:560px; width:90%; max-height:90vh; overflow:auto; }
+  #intro h1 { color:#ffd97a; font-size:28px; margin-bottom:4px; }
+  #intro .sub { color:#888; font-size:13px; margin-bottom:14px; }
+  #intro p.desc { font-size:14px; line-height:1.7; color:#ccc; margin-bottom:8px; }
+  #intro h2 { font-size:15px; color:#7ad0ff; margin:14px 0 6px; }
+  #intro ul { padding-left:20px; font-size:13px; line-height:1.8; color:#ddd; }
+  #intro .warn { background:#2a2a3d; border-left:3px solid #d97a7a; padding:8px 12px;
+                 margin-top:12px; font-size:12px; color:#ffd0d0; border-radius:4px; line-height:1.6; }
+  #intro button { margin-top:18px; width:100%; padding:12px; font-size:16px;
+                  background:#ffd97a; border:none; border-radius:8px; cursor:pointer; font-weight:bold; }
+  #intro button:hover { background:#ffc94a; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <div class="item">积分<b id="score">0</b></div>
+    <div class="item">待探索<b id="target">14</b></div>
+    <div class="item">用时<b id="time">0</b>s</div>
+    <div class="item">碎片<b id="frag">0/3</b></div>
+    <div class="inv" id="invBar">背包：<span style="opacity:.6">空</span></div>
+  </div>
+
+  <div id="map">
+    <!-- 场景装饰：家具 -->
+    <div class="scene armchair"></div>
+    <div class="scene door"></div>
+    <div class="scene doorLabel">← 门口</div>
+    <div class="scene bookshelf"></div>
+    <div class="scene window"></div>
+    <div class="scene fireplace">🔥</div>
+    <div class="scene table"></div>
+    <div class="scene plant">🪴</div>
+    <div class="scene piano"></div>
+    <div class="scene roundrug"></div>
+    <div class="scene chandelier">💡</div>
+    <div class="scene portrait">🎨</div>
+    <div class="scene musicstand">🎼</div>
+
+    <!-- 隔墙：把房间分成几个区域 -->
+    <div class="wallH" style="left:200px;top:180px;width:300px;"></div>
+    <div class="wallV" style="left:500px;top:180px;height:200px;"></div>
+    <div class="wallH" style="left:500px;top:380px;width:300px;"></div>
+    <div class="wallV" style="left:350px;top:380px;height:180px;"></div>
+
+    <!-- 噪音区域 ×4（位置由 JS 随机） -->
+    <div class="noise" data-noise="0" style="left:30%;top:30%;width:200px;height:200px;"></div>
+    <div class="noise" data-noise="1" style="left:10%;top:55%;width:160px;height:160px;"></div>
+    <div class="noise" data-noise="2" style="left:60%;top:60%;width:180px;height:180px;"></div>
+    <div class="noise" data-noise="3" style="left:75%;top:15%;width:170px;height:170px;"></div>
+
+    <!-- 留声机 ×4 -->
+    <div class="obj phonograph" data-id="phono1" data-type="phonograph"
+         data-audio="assets/phono1.wav">📻<small>留声机</small></div>
+    <div class="obj phonograph" data-id="phono2" data-type="phonograph"
+         data-audio="assets/phono2.wav">📻<small>留声机</small></div>
+    <div class="obj phonograph" data-id="phono3" data-type="phonograph"
+         data-audio="assets/phono1.wav">📻<small>留声机</small></div>
+    <div class="obj phonograph" data-id="phono4" data-type="phonograph"
+         data-audio="assets/phono2.wav">📻<small>留声机</small></div>
+
+    <!-- 黑胶唱片机 ×2 -->
+    <div class="obj vinylplayer" data-id="vp1" data-type="vinylplayer">🎶<small>黑胶机</small></div>
+    <div class="obj vinylplayer" data-id="vp2" data-type="vinylplayer">🎶<small>黑胶机</small></div>
+
+    <!-- 八音盒 -->
+    <div class="obj musicbox" data-id="box1" data-type="musicbox"
+         data-audio="assets/musicbox1.wav">🎁<small>八音盒</small></div>
+
+    <!-- 旋钮 ×3 -->
+    <div class="obj tune" data-id="tune1" data-type="tune">🎚️<small>旋钮</small></div>
+    <div class="obj tune" data-id="tune2" data-type="tune">🎚️<small>旋钮</small></div>
+    <div class="obj tune" data-id="tune3" data-type="tune">🎚️<small>旋钮</small></div>
+
+    <!-- 唱片拾取：外观全部一致 -->
+    <div class="obj" data-id="d1" data-type="disc" style="background:transparent;border:none;box-shadow:none;">
+      <div class="discpick"></div>
+    </div>
+    <div class="obj" data-id="d2" data-type="disc" style="background:transparent;border:none;box-shadow:none;">
+      <div class="discpick"></div>
+    </div>
+    <div class="obj" data-id="d3" data-type="disc" style="background:transparent;border:none;box-shadow:none;">
+      <div class="discpick"></div>
+    </div>
+    <div class="obj" data-id="d4" data-type="disc" style="background:transparent;border:none;box-shadow:none;">
+      <div class="discpick"></div>
+    </div>
+
+    <!-- 火柴人 -->
+    <div id="player">
+      <svg viewBox="0 0 32 44">
+        <circle cx="16" cy="9" r="6" fill="none" stroke="#fff" stroke-width="2"/>
+        <line x1="16" y1="15" x2="16" y2="30" stroke="#fff" stroke-width="2"/>
+        <line x1="16" y1="19" x2="9" y2="24" stroke="#fff" stroke-width="2"/>
+        <line x1="16" y1="19" x2="23" y2="24" stroke="#fff" stroke-width="2"/>
+        <line x1="16" y1="30" x2="10" y2="42" stroke="#fff" stroke-width="2"/>
+        <line x1="16" y1="30" x2="22" y2="42" stroke="#fff" stroke-width="2"/>
+      </svg>
+    </div>
+  </div>
+
+  <div id="tip">点击地图移动火柴人，点击物件互动。灰色虚线圈是噪音区，在里面放音乐会扣分。</div>
+</div>
+
+<div id="mask"></div>
+<div id="modal">
+  <h3 id="mTitle">音乐问答</h3>
+  <p id="mQ"></p>
+  <div id="mOpts"></div>
+</div>
+
+<div id="win">
+  <h1>🎉 通关！</h1>
+  <p>最终积分：<b id="winScore">0</b></p>
+  <p>用时：<span id="winTime">0</span> 秒</p>
+  <p>评价：<span id="winRank"></span></p>
+  <button onclick="location.reload()">再来一局</button>
+</div>
+
+<audio id="playerAudio" preload="auto"></audio>
+
+<!-- 开场介绍 -->
+<div id="intro">
+  <div class="card">
+    <h1>🎵 音乐小屋 · 寻声之旅</h1>
+    <div class="sub">A Music-Searching Mini Demo</div>
+    <p class="desc">深夜，你从左上角的门口走进一间堆满旧乐器的神秘小屋。屋里散落着留声机、黑胶唱片机、八音盒和调音旋钮。把小屋探索完毕——所有发声的物件都找过、玩过——才能离开。分数越高，评价越好。</p>
+    <h2>🕹️ 操作</h2>
+    <ul>
+      <li><b>点击地图空地</b>：火柴人走过去</li>
+      <li><b>点击物件</b>：自动走近并互动</li>
+    </ul>
+    <h2>🎧 物件说明</h2>
+    <ul>
+      <li>🟫 <b>留声机</b>：自带唱片，直接播放拿分</li>
+      <li>⬛ <b>黑胶唱片机</b>：需要先捡一张黑胶唱片，播放 AI 音乐（20–30 秒），播完答题加分</li>
+      <li>🟣 <b>八音盒</b>：短旋律，少量分</li>
+      <li>🔵 <b>调音旋钮</b>：集齐 3 个触发隐藏合奏</li>
+      <li>⚫ <b>散落黑胶唱片</b>：外观完全一样，放进唱片机才知道好坏——普通 / 彩胶 / 破损 / 还有一张假唱片陷阱</li>
+    </ul>
+    <div class="warn">
+      ⚠️ <b>小心：</b>灰色虚线圈是噪音区；拖得越久分越低；播放时守在机器旁听完有「完美聆听」加成。
+    </div>
+    <button onclick="startGame()">🎮 开始寻声</button>
+  </div>
+</div>
+
+<script>
+/* ==================== 游戏状态 ==================== */
+const S = {
+  score: 0, target: 300, time: 0,
+  started: false, playing: false,
+  inventory: [],
+  fragCollected: 0,
+  usedObjects: new Set(),
+  lockedPlayers: new Set(),
+  perfectListen: false,
+  currentMachine: null,
+  endTimer: null,
+};
+
+const VINYL_TRACKS = [
+  "assets/vinyl1.mp4","assets/vinyl2.mp4","assets/vinyl3.mp4","assets/vinyl4.mp4",
+];
+
+// 唱片品质：拾取时随机摇
+const DISC_CFG = {
+  normal:  { name:"普通黑胶", base:60 },
+  rare:    { name:"彩胶唱片", base:120 },
+  broken:  { name:"破损唱片", base:25 },
+  fake:    { name:"假唱片",   base:0  },
+};
+function rollQuality(){
+  const r = Math.random();
+  if(r < 0.12) return "fake";
+  if(r < 0.32) return "broken";
+  if(r < 0.65) return "normal";
+  return "rare";
+}
+
+// 题库：多样化（风格/歌名/情绪/乐器/节拍/BPM/有没有某乐器）
+const QUESTIONS = [
+  { q:"这首曲子最接近哪种音乐风格？", opts:["古典管弦","爵士摇摆","电子舞曲","民谣吉他"], ans:0 },
+  { q:"你觉得这首曲子最像下面哪首名曲？", opts:["《月光奏鸣曲》","《蓝色多瑙河》","《致爱丽丝》","《夜曲》"], ans:2 },
+  { q:"这段音乐的整体情绪是？", opts:["欢快活泼","宁静略带忧伤","紧张悬疑","激昂澎湃"], ans:1 },
+  { q:"这首曲子的主奏乐器更可能是？", opts:["钢琴独奏","小提琴独奏","长笛独奏","萨克斯独奏"], ans:0 },
+  { q:"你听到的节拍更像？", opts:["2/4 拍（进行曲）","3/4 拍（圆舞曲）","4/4 拍（流行）","6/8 拍（船歌）"], ans:2 },
+  { q:"这首曲子的速度大概是？", opts:["慢速 &lt;80","中速 80–110","快速 110–140","极快 &gt;140"], ans:1 },
+  { q:"这首曲子给你的画面感是？", opts:["雨夜街道","阳光海滩","森林清晨","城市夜晚"], ans:3 },
+  { q:"你在曲子里听到了钢琴吗？", opts:["明显有","好像有一点","完全没有"], ans:0 },
+  { q:"这首曲子的和声（和弦色彩）更偏？", opts:["明亮大调","幽暗小调","模糊无调"], ans:1 },
+  { q:"这首曲子适合用来做什么？", opts:["咖啡馆背景音乐","夜店蹦迪","葬礼进行曲","运动会入场"], ans:0 },
+];
+
+const $ = id => document.getElementById(id);
+const map = $("map"), player = $("player"), audio = $("playerAudio");
+
+/* ==================== 工具 ==================== */
+function dist(a,b){
+  return Math.hypot(parseFloat(a.style.left)-parseFloat(b.style.left),
+                    parseFloat(a.style.top)-parseFloat(b.style.top));
+}
+function showTip(t){ $("tip").textContent = t; }
+function addScore(n){
+  S.score += n; $("score").textContent = S.score;
+  // 不再靠分数通关，只记录分数用于评价
+}
+function renderInv(){
+  const bar = $("invBar");
+  bar.innerHTML = S.inventory.length === 0
+    ? '背包：<span style="opacity:.6">空</span>'
+    : "背包：" + S.inventory.map(()=>'<span class="chip">💿 黑胶</span>').join(" ");
+}
+
+/* ==================== 计时器 / 衰减 / 噪音 ==================== */
+setInterval(()=>{
+  if(!S.started || S.playing) return;
+  S.time++; $("time").textContent = S.time;
+}, 1000);
+function timeDecay(){ return Math.max(0.5, 1 - S.time*0.002); }
+function inNoise(){
+  const px = parseFloat(player.style.left), py = parseFloat(player.style.top);
+  for(const n of document.querySelectorAll(".noise")){
+    const cx = parseFloat(n.style.left)+n.offsetWidth/2;
+    const cy = parseFloat(n.style.top)+n.offsetHeight/2;
+    if(Math.hypot(px-cx,py-cy) < n.offsetWidth/2) return true;
+  }
+  return false;
+}
+
+/* ==================== 开局随机布点 ==================== */
+const MAP_W = 1000, MAP_H = 600;
+function randPos(existing, minDist=80){
+  for(let t=0;t<200;t++){
+    const x = 50 + Math.random()*(MAP_W-120);
+    const y = 50 + Math.random()*(MAP_H-120);
+    let ok = true;
+    for(const p of existing){
+      if(Math.hypot(x-p.x, y-p.y) < minDist){ ok=false; break; }
+    }
+    if(ok) return {x,y};
+  }
+  return { x:50+Math.random()*(MAP_W-100), y:50+Math.random()*(MAP_H-100) };
+}
+function placeRandomly(){
+  const placed = [];
+  // 场景装饰占的位置，留出来（不把物件刷在墙/家具上）
+  const avoid = [
+    {x:35,y:55,r:80},    // 门口
+    {x:65,y:90,r:90},    // 书架
+    {x:900,y:80,r:90},   // 窗户
+    {x:85,y:480,r:90},   // 壁炉
+    {x:940,y:540,r:90},  // 桌子
+    {x:450,y:270,r:90},  // 扶手椅
+    {x:670,y:80,r:100},  // 三角钢琴
+    {x:300,y:430,r:110}, // 圆形地毯
+    {x:475,y:120,r:50},  // 挂画
+    {x:765,y:360,r:50},  // 乐谱架
+    {x:350,y:187,r:40},  // 隔墙1
+    {x:507,y:280,r:40},  // 隔墙2
+    {x:650,y:387,r:40},  // 隔墙3
+    {x:357,y:470,r:40},  // 隔墙4
+  ];
+  // 把"禁区"先塞进 placed，让 randPos 自动避开
+  avoid.forEach(a=> placed.push({x:a.x, y:a.y}));
+  // 噪音区 ×4 也随机
+  document.querySelectorAll(".noise").forEach(n=>{
+    const p = randPos(placed, 200);
+    n.style.left = p.x+"px"; n.style.top = p.y+"px";
+    placed.push(p);
+  });
+  // 物件按顺序放
+  const ids = ["phono1","phono2","phono3","phono4","vp1","vp2","box1","tune1","tune2","tune3","d1","d2","d3","d4"];
+  ids.forEach(id=>{
+    const el = document.querySelector(`[data-id="${id}"]`);
+    const p = randPos(placed, 85);
+    el.style.left = p.x+"px"; el.style.top = p.y+"px";
+    placed.push(p);
+  });
+  // 玩家从左上角门口进入
+  player.style.left = "15px";
+  player.style.top  = "40px";
+  S.totalObjects = ids.length;
+}
+
+/* ==================== 移动 ==================== */
+map.addEventListener("click", e=>{
+  if(!S.started || S.playing) return;
+  if(e.target.closest(".obj")) return;
+  const rect = map.getBoundingClientRect();
+  const scaleX = MAP_W/rect.width, scaleY = MAP_H/rect.height;
+  const x = (e.clientX-rect.left)*scaleX - 16;
+  const y = (e.clientY-rect.top)*scaleY - 22;
+  player.style.left = Math.max(0,Math.min(x,MAP_W-32))+"px";
+  player.style.top  = Math.max(0,Math.min(y,MAP_H-44))+"px";
+});
+
+/* ==================== 播放核心 ==================== */
+function playAudio(src, onEnd, maxSec){
+  S.playing = true;
+  S.perfectListen = true;
+  audio.src = src;
+  audio.volume = inNoise() ? 0.4 : 1.0;
+  audio.play();
+
+  const done = ()=>{
+    if(S.endTimer){ clearTimeout(S.endTimer); S.endTimer=null; }
+    S.playing = false;
+    onEnd && onEnd();
+  };
+  audio.onended = done;
+  // 黑胶播放限制 20–30 秒
+  if(maxSec){
+    S.endTimer = setTimeout(()=>{ audio.pause(); done(); }, maxSec*1000);
+  }
+  // 完美聆听监测
+  if(S.currentMachine){
+    const watch = setInterval(()=>{
+      if(!S.playing){ clearInterval(watch); return; }
+      if(dist(player,S.currentMachine) > 100) S.perfectListen = false;
+    },200);
+  }
+}
+
+/* ==================== 物件点击 ==================== */
+document.querySelectorAll(".obj").forEach(obj=>{
+  obj.addEventListener("click", ()=>{
+    if(!S.started || S.playing || S.usedObjects.has(obj.dataset.id)) return;
+    const type = obj.dataset.type;
+    // 走过去
+    player.style.left = (parseFloat(obj.style.left)+10)+"px";
+    player.style.top  = (parseFloat(obj.style.top)+60)+"px";
+
+    if(type === "disc"){ pickupDisc(obj); return; }
+    if(S.lockedPlayers.has(obj.dataset.id)){ showTip("这台唱片机被假唱片卡死了…"); return; }
+
+    S.currentMachine = obj;
+    obj.classList.add("playing");
+
+    if(type === "phonograph"){
+      playAudio(obj.dataset.audio, ()=>{
+        obj.classList.remove("playing"); obj.classList.add("used");
+        S.usedObjects.add(obj.dataset.id); checkAllExplored();
+        const mult = timeDecay()*(inNoise()?0.6:1.0)*(S.perfectListen?1.2:1.0);
+        const gain = Math.round(80*mult);
+        addScore(gain);
+        showTip(`🎵 留声机播放完毕 +${gain} 分${inNoise()?"（噪音衰减）":""}${S.perfectListen?"（完美聆听）":""}`);
+      });
+    }
+    else if(type === "musicbox"){
+      playAudio(obj.dataset.audio, ()=>{
+        obj.classList.remove("playing"); obj.classList.add("used");
+        S.usedObjects.add(obj.dataset.id); checkAllExplored();
+        const mult = timeDecay()*(inNoise()?0.6:1.0);
+        const gain = Math.round(30*mult);
+        addScore(gain);
+        showTip(`🎵 八音盒叮咚作响 +${gain} 分`);
+      });
+    }
+    else if(type === "tune"){
+      obj.classList.add("used");
+      S.usedObjects.add(obj.dataset.id);
+      S.fragCollected++;
+      $("frag").textContent = S.fragCollected+"/3";
+      obj.classList.remove("playing");
+      if(S.fragCollected === 3){
+        addScore(100);
+        showTip("🎹 三段旋律集齐！解锁隐藏合奏 +100 分！");
+      } else {
+        showTip(`🔧 调到一段旋律碎片（${S.fragCollected}/3）`);
+      }
+    }
+    else if(type === "vinylplayer"){
+      if(S.inventory.length === 0){
+        obj.classList.remove("playing");
+        showTip("⚠️ 黑胶唱片机里没有唱片！先去地图上捡一张黑胶。");
+        return;
+      }
+      const disc = S.inventory.shift();
+      renderInv();
+      obj.classList.remove("playing");
+      if(disc.quality === "fake"){
+        S.lockedPlayers.add(obj.dataset.id);
+        obj.classList.add("used");
+        S.usedObjects.add(obj.dataset.id); checkAllExplored();
+        showTip("💥 嘶——！是张假唱片，唱片机被刮坏了，这台不能再用。");
+        return;
+      }
+      const track = VINYL_TRACKS[Math.floor(Math.random()*VINYL_TRACKS.length)];
+      const maxSec = 20 + Math.random()*10; // 20–30 秒
+      playAudio(track, ()=>{
+        obj.classList.remove("playing"); obj.classList.add("used");
+        S.usedObjects.add(obj.dataset.id); checkAllExplored();
+        const base = DISC_CFG[disc.quality].base;
+        const mult = timeDecay()*(inNoise()?0.6:1.0)*(S.perfectListen?1.2:1.0);
+        const baseGain = Math.round(base*mult);
+        addScore(baseGain);
+        askQuestion(baseGain);
+      }, maxSec);
+    }
+  });
+});
+
+/* ==================== 拾取唱片（随机摇品质） ==================== */
+function pickupDisc(obj){
+  const quality = rollQuality();
+  S.inventory.push({ quality });
+  obj.classList.add("used");
+  S.usedObjects.add(obj.dataset.id); checkAllExplored();
+  renderInv();
+  showTip(`💿 捡到一张黑胶唱片，已放入背包。（是好是坏？放进去才知道…）`);
+}
+
+/* ==================== 问答 ==================== */
+function askQuestion(baseGain){
+  const q = QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)];
+  $("mTitle").textContent = "🎧 这首曲子，你听出了什么？";
+  $("mQ").textContent = q.q;
+  const box = $("mOpts");
+  box.innerHTML = "";
+  q.opts.forEach((op,i)=>{
+    const b = document.createElement("button");
+    b.className = "opt"; b.textContent = op;
+    b.onclick = ()=>{
+      if(i === q.ans){
+        b.classList.add("right");
+        addScore(80);
+        showTip(`✅ 答对了！问答奖励 +80（本次共 +${baseGain+80}）`);
+      } else {
+        b.classList.add("wrong");
+        showTip(`❌ 答错了，本次基础分 +${baseGain}，无奖励。`);
+      }
+      setTimeout(()=>{ $("mask").style.display="none"; $("modal").style.display="none"; }, 900);
+    };
+    box.appendChild(b);
+  });
+  $("mask").style.display = "block";
+  $("modal").style.display = "block";
+}
+
+/* ==================== 通关：全部物件探索完才结束 ==================== */
+function checkAllExplored(){
+  if(S.won) return;
+  if(S.usedObjects.size >= S.totalObjects){
+    win();
+  } else {
+    // 实时提示进度
+    $("target").textContent = (S.totalObjects - S.usedObjects.size) + " 个待探索";
+  }
+}
+
+function win(){
+  S.won = true;
+  $("winScore").textContent = S.score;
+  $("winTime").textContent = S.time;
+  let rank = "C";
+  if(S.score >= 500) rank = "S · 音乐鉴赏大师";
+  else if(S.score >= 400) rank = "A · 资深听众";
+  else if(S.score >= 300) rank = "B · 初入音门";
+  else rank = "C · 刚入门的听众";
+  $("winRank").textContent = rank;
+  $("win").style.display = "flex";
+}
+
+/* ==================== 开始 ==================== */
+function startGame(){
+  placeRandomly();
+  S.started = true;
+  $("intro").style.display = "none";
+  showTip("🎧 寻声开始！火柴人走进房间，去找到那些发声的物件吧。");
+}
+renderInv();
+</script>
+</body>
+</html>
