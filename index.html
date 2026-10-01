@@ -193,7 +193,7 @@
   <div id="hud">
     <div class="item">积分<b id="score">0</b></div>
     <div class="item">待探索<b id="target">14</b></div>
-    <div class="item">用时<b id="time">0</b>s</div>
+    <div class="item">用时<b id="time">0/70</b></div>
     <div class="item">碎片<b id="frag">0/3</b></div>
     <div class="inv" id="invBar">背包：<span style="opacity:.6">空</span></div>
   </div>
@@ -287,7 +287,7 @@
 </div>
 
 <div id="win">
-  <h1>🎉 通关！</h1>
+  <h1 id="winTitle">🎉 通关！</h1>
   <p>最终积分：<b id="winScore">0</b></p>
   <p>用时：<span id="winTime">0</span> 秒</p>
   <p>评价：<span id="winRank"></span></p>
@@ -307,7 +307,7 @@
   <div class="card">
     <h1>🎵 音乐小屋 · 寻声之旅</h1>
     <div class="sub">A Music-Searching Mini Demo</div>
-    <p class="desc">深夜，你从左上角的门口走进一间堆满旧乐器的神秘小屋。屋里散落着留声机、黑胶唱片机、八音盒和调音旋钮。把小屋探索完毕——所有发声的物件都找过、玩过——才能离开。分数越高，评价越好。</p>
+    <p class="desc">深夜，你从左上角的门口走进一间堆满旧乐器的神秘小屋。<b style="color:#ffd97a">只有 70 秒</b>！在时间耗尽前尽可能多地找到发声物件并播放它们——分数越高，评价越好。时间一到自动结束。</p>
     <h2>🕹️ 操作</h2>
     <ul>
       <li><b>点击地图空地</b>：火柴人走过去</li>
@@ -396,9 +396,16 @@ function renderInv(){
 }
 
 /* ==================== 计时器 / 衰减 / 噪音 ==================== */
+const TIME_LIMIT = 70;
 setInterval(()=>{
-  if(!S.started || S.playing) return;
-  S.time++; $("time").textContent = S.time;
+  if(!S.started || S.playing || S.won) return;
+  S.time++;
+  $("time").textContent = S.time + "/" + TIME_LIMIT;
+  // 时间到自动结束
+  if(S.time >= TIME_LIMIT){
+    showTip("⏰ 时间到！探索结束。");
+    win();
+  }
 }, 1000);
 function timeDecay(){ return Math.max(0.5, 1 - S.time*0.002); }
 function inNoise(){
@@ -672,8 +679,10 @@ function checkAllExplored(){
 
 function win(){
   S.won = true;
+  const timeUp = S.time >= TIME_LIMIT;
+  $("winTitle").textContent = timeUp ? "⏰ 时间到！" : "🎉 探索完成！";
   $("winScore").textContent = S.score;
-  $("winTime").textContent = S.time;
+  $("winTime").textContent = S.time + " 秒";
   let rank = "C";
   if(S.score >= 500) rank = "S · 音乐鉴赏大师";
   else if(S.score >= 400) rank = "A · 资深听众";
