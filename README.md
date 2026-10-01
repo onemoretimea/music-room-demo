@@ -88,4 +88,4 @@ python -m http.server 8000
 
 ## 📄 License
 
-Demo 项目，自由使用。
+原创项目 仅供试玩。
